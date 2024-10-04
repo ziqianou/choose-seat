@@ -1,10 +1,10 @@
 {
     "groups": {
         "group1": [
-            "",
-            ""
+            "student1",
+            "student2……"
         ]
     },
-    "num_row": 1,
-    "num_cell": 1
+    "num_row": 9,
+    "num_cell": 8
 }
