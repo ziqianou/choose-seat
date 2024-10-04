@@ -9,8 +9,17 @@ class SeatingChartApp:
     def __init__(self, root):
         self.root = root
         self.root.title("座位选择系统")
+        self.groups = {}
+        self.num_row = 0
+        self.num_cell = 0
 
-        self.seats = [["" for _ in range(8)] for _ in range(7)]
+        with open(".\\settings.json", "r", encoding="utf-8") as file:
+            data = json.load(file)
+            self.groups = data.get("groups", self.groups)
+            self.num_row = data.get("num_row", self.num_row)
+            self.num_cell = data.get("num_cell", self.num_cell)
+
+        self.seats = [["" for _ in range(self.num_cell)] for _ in range(self.num_row)]
         self.group_colors = {
             "group1": "lightblue",
             "group2": "lightgreen",
@@ -44,9 +53,11 @@ class SeatingChartApp:
         )
         self.clear_button.grid(row=1, column=2, columnspan=2)
 
-        self.seat_buttons = [[None for _ in range(8)] for _ in range(7)]
-        for r in range(7):
-            for c in range(8):
+        self.seat_buttons = [
+            [None for _ in range(self.num_cell)] for _ in range(self.num_row)
+        ]
+        for r in range(self.num_row):
+            for c in range(self.num_cell):
                 self.seat_buttons[r][c] = tk.Button(
                     self.root,
                     text="空",
@@ -154,13 +165,11 @@ class SeatingChartApp:
                         self.leader_mode[group_name] = False
             else:  # 选择个人座位
                 if [row, col] in self.group_selections[group_name]:
-                    if self.assigned_seats.get(name) == (row, col):
+                    if self.assigned_seats.get(name) == [row, col]:
                         # 取消选择
                         self.seats[row][col] = group_name
                         del self.assigned_seats[name]
-                        self.seat_buttons[row][col].config(
-                            text="空", bg=self.group_colors[group_name]
-                        )
+                        self.seat_buttons[row][col].config(text="空")
                         self.save_seating_data()
                         messagebox.showinfo("取消", f"{name} 取消了座位 ({row}, {col})")
                     elif name in self.assigned_seats:
@@ -170,10 +179,8 @@ class SeatingChartApp:
                         return
                     elif self.seats[row][col] == group_name:
                         self.seats[row][col] = name
-                        self.assigned_seats[name] = (row, col)
-                        self.seat_buttons[row][col].config(
-                            text=name, bg=self.group_colors[group_name]
-                        )
+                        self.assigned_seats[name] = [row, col]
+                        self.seat_buttons[row][col].config(text=name)
                         self.save_seating_data()
                         # messagebox.showinfo("成功", f"{name} 已选择座位 ({row}, {col})")
                     else:
@@ -183,13 +190,11 @@ class SeatingChartApp:
         else:
             if group_name in self.group_selections:
                 if [row, col] in self.group_selections[group_name]:
-                    if self.assigned_seats.get(name) == (row, col):
+                    if self.assigned_seats.get(name) == [row, col]:
                         # 取消选择
                         self.seats[row][col] = group_name
                         del self.assigned_seats[name]
-                        self.seat_buttons[row][col].config(
-                            text="空", bg="SystemButtonFace"
-                        )
+                        self.seat_buttons[row][col].config(text="空")
                         self.save_seating_data()
                         messagebox.showinfo("取消", f"{name} 取消了座位 ({row}, {col})")
                     elif name in self.assigned_seats:
@@ -199,7 +204,7 @@ class SeatingChartApp:
                         return
                     elif self.seats[row][col] == group_name:
                         self.seats[row][col] = name
-                        self.assigned_seats[name] = (row, col)
+                        self.assigned_seats[name] = [row, col]
                         self.seat_buttons[row][col].config(text=name)
                         self.save_seating_data()
                         # messagebox.showinfo("成功", f"{name} 已选择座位 ({row}, {col})")
@@ -261,67 +266,23 @@ class SeatingChartApp:
             width: 5rem;
             text-align: center;
         }
-        
-        .group1 {
-            background-color: lightblue;
-        }
-
-        .group2 {
-            background-color: lightgreen;
-        }
-
-        .group3 {
-            background-color: lightyellow;
-        }
-
-        .group4 {
-            background-color: lightpink;
-        }
-
-        .group5 {
-            background-color: lightgray;
-        }
-
-        .group6 {
-            background-color: lightcoral;
-        }
-
-        .group7 {
-            background-color: lightseagreen;
-        }
-
-        .group8 {
-            background-color: lightgoldenrodyellow;
-        }
-
-        .seat-leader::before {
-            content: "* ";
-            color: red;
-            font-weight: bold;
-        }
     </style>
-</head><body><h1>座位选择结果</h1><table border='1' id="seatingTable">
-        <tr>
-            <th colspan="2">一</th>
-            <th colspan="4">讲台</th>
-            <th colspan="4">前门</th>
-        </tr>"""
-        for r in range(7):
-            html_content += "<tr>"
-            for c in range(8):
+</head>
+    <body>
+        <h1>座位选择结果</h1>
+        <table border='1' id="seatingTable">
+"""
+        for r in range(self.num_row):
+            html_content += f"\n        <tr>"
+            for c in range(self.num_cell):
                 seat = self.seats[r][c]
-                html_content += f"<td>{seat if seat else '空'}</td>"
-            html_content += "</tr>"
-        html_content += """<tr>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th>后门</th>
-        </tr></table></body></html>"""
+                html_content += f"\n            <td>{seat if seat else '空'}</td>"
+            html_content += f"\n        </tr>"
+        html_content += """        </tr>
+    </table>
+</body>
+</html>
+"""
 
         with open("main.html", "w", encoding="utf-8") as file:
             file.write(html_content)
@@ -329,7 +290,9 @@ class SeatingChartApp:
 
     def clear_all(self):
         if messagebox.askyesno("清空", "确定要清空所有配置吗？") == True:
-            self.seats = [["" for _ in range(8)] for _ in range(7)]
+            self.seats = [
+                ["" for _ in range(self.num_cell)] for _ in range(self.num_row)
+            ]
             self.group_selections.clear()
             self.assigned_seats.clear()
             self.leader_mode.clear()
@@ -340,8 +303,8 @@ class SeatingChartApp:
             messagebox.showinfo("取消", "操作已取消")
 
     def update_seat_buttons(self):
-        for r in range(7):
-            for c in range(8):
+        for r in range(self.num_row):
+            for c in range(self.num_cell):
                 self.seat_buttons[r][c].config(text="空", bg="SystemButtonFace")
 
     def show_unassigned_members(self):
@@ -387,7 +350,11 @@ class SeatingChartApp:
                         values=(f"{self.groups.get(group_name)[0]}组",),
                         tags=("group",),
                     )
-                    self.tree.tag_configure("group", font=("Arial", 10, "bold"))
+                    self.tree.tag_configure(
+                        "group",
+                        font=("Arial", 10, "bold"),
+                        foreground="blue",
+                    )
                     self.tree.item(group_item, open=True)  # 默认展开组
 
                     # 添加未分配座位的成员
