@@ -80,6 +80,10 @@ class SeatingChartApp:
             self.root, text="显示未分配座位", command=self.show_unassigned_members
         )
         self.show_unassigned_button.grid(row=1, column=4, columnspan=2)
+        self.show_all_button = tk.Button(
+            self.root, text="显示所有成员", command=self.show_all_members
+        )
+        self.show_all_button.grid(row=1, column=6, columnspan=2)
 
     def find_group(self, name):
         for group_name, members in self.groups.items():
@@ -125,68 +129,38 @@ class SeatingChartApp:
             messagebox.showerror("错误", "找不到该组")
             return
 
-        if self.is_leader(group_name, name):
-            if self.leader_mode.get(group_name, True):  # 选择组区域
-                if [row, col] in self.group_selections.get(group_name, []):
-                    # 取消选择
-                    self.group_selections[group_name].remove([row, col])
-                    self.seats[row][col] = ""
-                    self.seat_buttons[row][col].config(bg="SystemButtonFace", text="空")
+        if self.is_leader(group_name, name) and self.leader_mode.get(group_name, True):
+            if [row, col] in self.group_selections.get(group_name, []):
+                # 取消选择
+                self.group_selections[group_name].remove([row, col])
+                self.seats[row][col] = ""
+                self.seat_buttons[row][col].config(bg="SystemButtonFace", text="空")
+                self.save_seating_data()
+                messagebox.showinfo("取消", f"取消了位置 ({row}, {col})")
+            else:
+                if name in self.assigned_seats:
+                    messagebox.showinfo(
+                        "提示", f"{name} 已选择座位 ({self.assigned_seats[name]})"
+                    )
+                    return
+                if self.seats[row][col] != "" and self.seats[row][col] != group_name:
+                    messagebox.showerror("错误", "该位置已被其他组占用")
+                    return
+
+                if group_name not in self.group_selections:
+                    self.group_selections[group_name] = []
+
+                if len(self.group_selections[group_name]) < len(
+                    self.groups[group_name]
+                ):
+                    self.group_selections[group_name].append([row, col])
+                    self.seats[row][col] = group_name
+                    self.seat_buttons[row][col].config(bg=self.group_colors[group_name])
                     self.save_seating_data()
-                    messagebox.showinfo("取消", f"取消了位置 ({row}, {col})")
+                    # messagebox.showinfo("成功", f"组 {group_name} 选择了位置 ({row}, {col})")
                 else:
-                    if name in self.assigned_seats:
-                        messagebox.showinfo(
-                            "提示", f"{name} 已选择座位 ({self.assigned_seats[name]})"
-                        )
-                        return
-                    if (
-                        self.seats[row][col] != ""
-                        and self.seats[row][col] != group_name
-                    ):
-                        messagebox.showerror("错误", "该位置已被其他组占用")
-                        return
-
-                    if group_name not in self.group_selections:
-                        self.group_selections[group_name] = []
-
-                    if len(self.group_selections[group_name]) < len(
-                        self.groups[group_name]
-                    ):
-                        self.group_selections[group_name].append([row, col])
-                        self.seats[row][col] = group_name
-                        self.seat_buttons[row][col].config(
-                            bg=self.group_colors[group_name]
-                        )
-                        self.save_seating_data()
-                        # messagebox.showinfo("成功", f"组 {group_name} 选择了位置 ({row}, {col})")
-                    else:
-                        messagebox.showinfo("提示", f"组 {group_name} 已选择所有位置")
-                        self.leader_mode[group_name] = False
-            else:  # 选择个人座位
-                if [row, col] in self.group_selections[group_name]:
-                    if self.assigned_seats.get(name) == [row, col]:
-                        # 取消选择
-                        self.seats[row][col] = group_name
-                        del self.assigned_seats[name]
-                        self.seat_buttons[row][col].config(text="空")
-                        self.save_seating_data()
-                        messagebox.showinfo("取消", f"{name} 取消了座位 ({row}, {col})")
-                    elif name in self.assigned_seats:
-                        messagebox.showinfo(
-                            "提示", f"{name} 已选择座位 ({self.assigned_seats[name]})"
-                        )
-                        return
-                    elif self.seats[row][col] == group_name:
-                        self.seats[row][col] = name
-                        self.assigned_seats[name] = [row, col]
-                        self.seat_buttons[row][col].config(text=name)
-                        self.save_seating_data()
-                        # messagebox.showinfo("成功", f"{name} 已选择座位 ({row}, {col})")
-                    else:
-                        messagebox.showerror("错误", "座位已被占用")
-                else:
-                    messagebox.showerror("错误", "座位不在组的区域内")
+                    messagebox.showinfo("提示", f"组 {group_name} 已选择所有位置")
+                    self.leader_mode[group_name] = False
         else:
             if group_name in self.group_selections:
                 if [row, col] in self.group_selections[group_name]:
@@ -316,6 +290,11 @@ class SeatingChartApp:
             self.unassigned_window, columns=("Name",), show="headings"
         )
         self.tree.heading("Name", text="成员名称")
+        yscrollbar = ttk.Scrollbar(
+            self.unassigned_window, orient=tk.VERTICAL, command=self.tree.yview
+        )
+        yscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.configure(yscrollcommand=yscrollbar.set)
         self.tree.pack(padx=10, pady=10, fill="both", expand=True)
 
         # 绑定双击事件以设置输入框中的名称
@@ -384,23 +363,88 @@ class SeatingChartApp:
         # 绑定双击事件
         self.tree.bind("<Double-1>", self.on_double_click)
 
+    def show_all_members(self):
+        # 创建一个新的窗口来显示所有成员
+        self.all_members_window = tk.Toplevel(self.root)
+        self.all_members_window.title("所有成员")
+
+        self.tree = ttk.Treeview(
+            self.all_members_window, columns=("Name",), show="headings"
+        )
+        self.tree.heading("Name", text="成员名称")
+        yscrollbar = ttk.Scrollbar(
+            self.all_members_window, orient=tk.VERTICAL, command=self.tree.yview
+        )
+        yscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.configure(yscrollcommand=yscrollbar.set)
+        self.tree.pack(padx=10, pady=10, fill="both", expand=True)
+
+        # 绑定双击事件以设置输入框中的名称
+        self.tree.bind(
+            "<Double-1>", lambda event: self.on_double_click(self.tree, event)
+        )
+
+        # 清空 Treeview
+        if self.tree:
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+
+        # 添加数据到 Treeview
+        for i in range(len(self.groups)):
+            group_name = f"group{i}"
+            if group_name in self.groups:
+                members = self.groups[group_name]
+                # 添加组标题
+                group_item = self.tree.insert(
+                    "",
+                    "end",
+                    text=group_name,
+                    values=(f"{self.groups.get(group_name)[0]}组",),
+                    tags=("group",),
+                )
+                self.tree.tag_configure(
+                    "group",
+                    font=("Arial", 10, "bold"),
+                    foreground="blue",
+                )
+                self.tree.item(group_item, open=True)  # 默认展开组
+
+                # 添加所有成员
+                for member in members:
+                    # 判断是否为组长
+                    if self.is_leader(group_name, member):
+                        self.tree.insert(
+                            group_item,
+                            "end",
+                            text="",
+                            values=(member,),
+                            tags=("leader",),
+                        )
+                    else:
+                        self.tree.insert(
+                            group_item,
+                            "end",
+                            text="",
+                            values=(member,),
+                            tags=("member",),
+                        )
+
+                # 配置字体样式
+                self.tree.tag_configure("leader", font=("Arial", 10, "bold"))
+                self.tree.tag_configure("member", font=("Arial", 10))
+
+        # 绑定双击事件
+        self.tree.bind("<Double-1>", self.on_double_click)
+
     def on_double_click(self, event):
         item = self.tree.identify_row(event.y)
         if item:
             tags = self.tree.item(item)["tags"]
             values = self.tree.item(item)["values"]
-            if tags and len(tags) > 0:
+            if values and tags and len(tags) > 0:
                 if tags[0] != "group":
                     self.name_entry.delete(0, tk.END)
                     self.name_entry.insert(0, values[0])
-
-    def set_name_to_entry(self, tree, event):
-        item = tree.identify_row(event.y)
-        if item:
-            values = tree.item(item)["values"]
-            if values:
-                self.name_entry.delete(0, tk.END)
-                self.name_entry.insert(0, values[0])
 
 
 if __name__ == "__main__":
